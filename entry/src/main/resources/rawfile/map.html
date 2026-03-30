@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+    <title>监测地图</title>
+    <!-- BootCDN（国内快）；如在海外可换 unpkg.com -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{width:100%;height:100%;overflow:hidden;font-family:sans-serif}
+        #map{width:100%;height:100%}
+
+        /* 小船脉冲动画 */
+        @keyframes pulse{
+          0%  {box-shadow:0 0 0 0 rgba(24,144,255,.5)}
+          70% {box-shadow:0 0 0 14px rgba(24,144,255,0)}
+          100%{box-shadow:0 0 0 0 rgba(24,144,255,0)}
+        }
+        .boat-dot{
+          width:20px;height:20px;border-radius:50%;
+          background:#1890FF;border:3px solid #fff;
+          animation:pulse 2s infinite;
+        }
+        .monitor-dot{
+          width:14px;height:14px;border-radius:50%;
+          background:#FF4D4F;border:2px solid #fff;
+          box-shadow:0 0 6px rgba(0,0,0,.3);
+        }
+
+        /* 加载提示 */
+        #loading{
+          position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+          z-index:9999;background:rgba(255,255,255,.92);padding:18px 32px;
+          border-radius:12px;font-size:15px;color:#333;
+          box-shadow:0 2px 12px rgba(0,0,0,.15);
+          pointer-events:none;transition:opacity .4s;
+        }
+    </style>
+</head>
+<body>
+<div id="loading">地图加载中…</div>
+<div id="map"></div>
+
+<script>
+    /* ========== 初始化地图（青海湖中心） ========== */
+    var map = L.map('map', {
+      center: [36.88, 100.15],
+      zoom: 10,
+      zoomControl: true,
+      attributionControl: false
+    });
+
+    /* --- 瓦片图层 --- */
+    // OpenStreetMap（默认，无需Key）
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18
+    }).addTo(map);
+
+    // ★ 备选：高德瓦片（免费，直接替换上面的 tileLayer 即可）
+    // L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', {
+    //   subdomains: '1234', maxZoom: 18
+    // }).addTo(map);
+
+    /* 隐藏加载提示 */
+    map.whenReady(function () {
+      var el = document.getElementById('loading');
+      if (el) { el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 500); }
+    });
+
+    /* ========== 图标 ========== */
+    var boatIcon = L.divIcon({ html:'<div class="boat-dot"></div>', iconSize:[26,26], iconAnchor:[13,13], className:'' });
+    var monitorIcon = L.divIcon({ html:'<div class="monitor-dot"></div>', iconSize:[18,18], iconAnchor:[9,9], className:'' });
+
+    /* ========== 固定监测点 ========== */
+    var monitorPoints = [
+      { lat:37.05, lng:100.15, name:'1号监测点', loc:'青海湖北岸' },
+      { lat:36.88, lng:100.55, name:'2号监测点', loc:'青海湖东岸' },
+      { lat:36.62, lng:100.15, name:'3号监测点', loc:'青海湖南岸' },
+      { lat:36.88, lng:99.75,  name:'4号监测点', loc:'青海湖西岸' }
+    ];
+    monitorPoints.forEach(function(p){
+      L.marker([p.lat, p.lng], {icon: monitorIcon})
+        .addTo(map)
+        .bindPopup('<b>'+p.name+'</b><br>'+p.loc);
+    });
+
+    /* ========== 小船标记 & 轨迹 ========== */
+    var boatMarker = null;
+    var boatTrail  = [];
+    var trailLine  = null;
+
+    /**
+     * ArkTS 调用 —— 更新小船坐标
+     */
+    function updateBoatPosition(lat, lng) {
+      if (!lat || !lng || (lat === 0 && lng === 0)) return;
+
+      if (boatMarker) {
+        boatMarker.setLatLng([lat, lng]);
+      } else {
+        boatMarker = L.marker([lat, lng], {icon: boatIcon}).addTo(map);
+        boatMarker.bindPopup('<b>🚢 智清舟</b><br>等待状态数据…');
+        map.setView([lat, lng], 13);
+      }
+
+      /* 航迹 */
+      boatTrail.push([lat, lng]);
+      if (boatTrail.length > 200) boatTrail.shift();
+      if (trailLine) {
+        trailLine.setLatLngs(boatTrail);
+      } else {
+        trailLine = L.polyline(boatTrail, {
+          color:'#1890FF', weight:3, opacity:.55, dashArray:'8,5'
+        }).addTo(map);
+      }
+    }
+
+    /**
+     * ArkTS 调用 —— 更新小船弹窗状态
+     */
+    function updateBoatStatus(json) {
+      try {
+        var s = JSON.parse(json);
+        if (boatMarker) {
+          boatMarker.setPopupContent(
+            '<b>🚢 智清舟</b><br>' +
+            '<span style="color:#666">纬度: </span>' + s.lat.toFixed(6) + '<br>' +
+            '<span style="color:#666">经度: </span>' + s.lng.toFixed(6) + '<br>' +
+            '<span style="color:#666">速度: </span>' + s.speed.toFixed(1) + ' km/h<br>' +
+            '<span style="color:#666">卫星: </span>' + s.satellites + '<br>' +
+            '<span style="color:#666">状态: </span><span style="color:#52C41A">' + s.state + '</span>'
+          );
+        }
+      } catch(e){ console.error('updateBoatStatus error', e); }
+    }
+
+    /** ArkTS 调用 —— 居中到小船 */
+    function centerOnBoat() {
+      if (boatMarker) map.setView(boatMarker.getLatLng(), 14);
+    }
+
+    /** ArkTS 调用 —— 清除轨迹 */
+    function clearTrail() {
+      boatTrail = [];
+      if (trailLine) { map.removeLayer(trailLine); trailLine = null; }
+    }
+</script>
+</body>
+</html>
