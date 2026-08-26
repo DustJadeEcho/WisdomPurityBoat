@@ -4,23 +4,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
     <title>监测地图</title>
-    <!-- BootCDN（国内快）；如在海外可换 unpkg.com -->
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.css"/>
-    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+      window._AMapSecurityConfig = {
+        securityJsCode: 'your-amap-security-code'
+      };
+    </script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=your-amap-key"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{width:100%;height:100%;overflow:hidden;font-family:sans-serif}
         #map{width:100%;height:100%}
 
-        /* 小船脉冲动画 */
         @keyframes pulse{
           0%  {box-shadow:0 0 0 0 rgba(24,144,255,.5)}
           70% {box-shadow:0 0 0 14px rgba(24,144,255,0)}
           100%{box-shadow:0 0 0 0 rgba(24,144,255,0)}
         }
-        .boat-dot{
-          width:20px;height:20px;border-radius:50%;
-          background:#1890FF;border:3px solid #fff;
+        .boat-icon{
+          width:32px;height:32px;line-height:32px;text-align:center;
+          font-size:28px;
+          text-shadow:0 0 8px rgba(24,144,255,.8), 0 2px 4px rgba(0,0,0,.3);
           animation:pulse 2s infinite;
         }
         .monitor-dot{
@@ -28,8 +31,6 @@
           background:#FF4D4F;border:2px solid #fff;
           box-shadow:0 0 6px rgba(0,0,0,.3);
         }
-
-        /* 加载提示 */
         #loading{
           position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
           z-index:9999;background:rgba(255,255,255,.92);padding:18px 32px;
@@ -44,108 +45,266 @@
 <div id="map"></div>
 
 <script>
-    /* ========== 初始化地图（青海湖中心） ========== */
-    var map = L.map('map', {
-      center: [36.88, 100.15],
+    var map = new AMap.Map('map', {
+      center: [100.15, 36.88],
       zoom: 10,
-      zoomControl: true,
-      attributionControl: false
+      resizeEnable: true,
+      viewMode: '2D'
     });
 
-    /* --- 瓦片图层 --- */
-    // OpenStreetMap（默认，无需Key）
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18
-    }).addTo(map);
-
-    // ★ 备选：高德瓦片（免费，直接替换上面的 tileLayer 即可）
-    // L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', {
-    //   subdomains: '1234', maxZoom: 18
-    // }).addTo(map);
-
-    /* 隐藏加载提示 */
-    map.whenReady(function () {
-      var el = document.getElementById('loading');
-      if (el) { el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 500); }
-    });
-
-    /* ========== 图标 ========== */
-    var boatIcon = L.divIcon({ html:'<div class="boat-dot"></div>', iconSize:[26,26], iconAnchor:[13,13], className:'' });
-    var monitorIcon = L.divIcon({ html:'<div class="monitor-dot"></div>', iconSize:[18,18], iconAnchor:[9,9], className:'' });
-
-    /* ========== 固定监测点 ========== */
-    var monitorPoints = [
-      { lat:37.05, lng:100.15, name:'1号监测点', loc:'青海湖北岸' },
-      { lat:36.88, lng:100.55, name:'2号监测点', loc:'青海湖东岸' },
-      { lat:36.62, lng:100.15, name:'3号监测点', loc:'青海湖南岸' },
-      { lat:36.88, lng:99.75,  name:'4号监测点', loc:'青海湖西岸' }
-    ];
-    monitorPoints.forEach(function(p){
-      L.marker([p.lat, p.lng], {icon: monitorIcon})
-        .addTo(map)
-        .bindPopup('<b>'+p.name+'</b><br>'+p.loc);
-    });
-
-    /* ========== 小船标记 & 轨迹 ========== */
     var boatMarker = null;
-    var boatTrail  = [];
-    var trailLine  = null;
+    var boatTrail = [];
+    var trailLine = null;
+    var historyOverlays = [];
+    var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -24) });
+    var boatPopupHtml = '<b>🚢 智清舟</b><br>等待状态数据…';
+    var lastBoatLngLat = null;
+    var pendingCenter = false;
+    var boatUpdateSeq = 0;
 
-    /**
-     * ArkTS 调用 —— 更新小船坐标
-     */
-    function updateBoatPosition(lat, lng) {
-      if (!lat || !lng || (lat === 0 && lng === 0)) return;
+    map.on('complete', hideLoading);
+    setTimeout(hideLoading, 2500);
 
-      if (boatMarker) {
-        boatMarker.setLatLng([lat, lng]);
-      } else {
-        boatMarker = L.marker([lat, lng], {icon: boatIcon}).addTo(map);
-        boatMarker.bindPopup('<b>🚢 智清舟</b><br>等待状态数据…');
-        map.setView([lat, lng], 13);
-      }
-
-      /* 航迹 */
-      boatTrail.push([lat, lng]);
-      if (boatTrail.length > 200) boatTrail.shift();
-      if (trailLine) {
-        trailLine.setLatLngs(boatTrail);
-      } else {
-        trailLine = L.polyline(boatTrail, {
-          color:'#1890FF', weight:3, opacity:.55, dashArray:'8,5'
-        }).addTo(map);
+    function hideLoading() {
+      var el = document.getElementById('loading');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 500);
       }
     }
 
-    /**
-     * ArkTS 调用 —— 更新小船弹窗状态
-     */
+    function createBoatContent() {
+      return '<div class="boat-icon">🚢</div>';
+    }
+
+    function createMonitorContent() {
+      return '<div class="monitor-dot"></div>';
+    }
+
+    function toLngLatFromGps(lat, lng, callback) {
+      if (!lat || !lng || (lat === 0 && lng === 0)) return;
+      var raw = [lng, lat];
+      if (!window.AMap || !AMap.convertFrom) {
+        callback(new AMap.LngLat(lng, lat));
+        return;
+      }
+
+      AMap.convertFrom(raw, 'gps', function(status, result) {
+        if (status === 'complete' && result.locations && result.locations.length > 0) {
+          callback(result.locations[0]);
+        } else {
+          callback(new AMap.LngLat(lng, lat));
+        }
+      });
+    }
+
+    function convertPathFromGps(coords, callback) {
+      if (!coords || coords.length === 0) {
+        callback([]);
+        return;
+      }
+      if (!window.AMap || !AMap.convertFrom) {
+        callback(coords.map(function(p){ return new AMap.LngLat(p[1], p[0]); }));
+        return;
+      }
+
+      var source = coords.map(function(p){ return [p[1], p[0]]; });
+      var resultPath = new Array(source.length);
+      var chunkSize = 40;
+      var index = 0;
+
+      function nextChunk() {
+        if (index >= source.length) {
+          callback(resultPath);
+          return;
+        }
+        var start = index;
+        var chunk = source.slice(start, start + chunkSize);
+        index += chunkSize;
+
+        AMap.convertFrom(chunk, 'gps', function(status, result) {
+          if (status === 'complete' && result.locations) {
+            for (var i = 0; i < chunk.length; i++) {
+              resultPath[start + i] = result.locations[i] || new AMap.LngLat(chunk[i][0], chunk[i][1]);
+            }
+          } else {
+            for (var j = 0; j < chunk.length; j++) {
+              resultPath[start + j] = new AMap.LngLat(chunk[j][0], chunk[j][1]);
+            }
+          }
+          nextChunk();
+        });
+      }
+
+      nextChunk();
+    }
+
+    function addMonitorPoint(point) {
+      toLngLatFromGps(point.lat, point.lng, function(lngLat) {
+        var marker = new AMap.Marker({
+          position: lngLat,
+          content: createMonitorContent(),
+          anchor: 'center'
+        });
+        marker.on('click', function() {
+          infoWindow.setContent('<b>' + point.name + '</b><br>' + point.loc);
+          infoWindow.open(map, lngLat);
+        });
+        map.add(marker);
+      });
+    }
+
+    [
+      { lat:37.05, lng:100.15, name:'1号监测点', loc:'高原湖泊北岸' },
+      { lat:36.88, lng:100.55, name:'2号监测点', loc:'高原湖泊东岸' },
+      { lat:36.62, lng:100.15, name:'3号监测点', loc:'高原湖泊南岸' },
+      { lat:36.88, lng:99.75,  name:'4号监测点', loc:'高原湖泊西岸' }
+    ].forEach(addMonitorPoint);
+
+    function updateBoatPosition(lat, lng) {
+      var seq = ++boatUpdateSeq;
+      toLngLatFromGps(lat, lng, function(lngLat) {
+        if (seq !== boatUpdateSeq) return;
+
+        lastBoatLngLat = lngLat;
+        if (boatMarker) {
+          boatMarker.setPosition(lngLat);
+        } else {
+          boatMarker = new AMap.Marker({
+            position: lngLat,
+            content: createBoatContent(),
+            anchor: 'center',
+            zIndex: 100
+          });
+          boatMarker.on('click', function() {
+            infoWindow.setContent(boatPopupHtml);
+            infoWindow.open(map, boatMarker.getPosition());
+          });
+          map.add(boatMarker);
+          map.setZoomAndCenter(13, lngLat);
+        }
+
+        boatTrail.push(lngLat);
+        if (boatTrail.length > 200) boatTrail.shift();
+        if (trailLine) {
+          trailLine.setPath(boatTrail);
+        } else {
+          trailLine = new AMap.Polyline({
+            path: boatTrail,
+            strokeColor: '#1890FF',
+            strokeWeight: 4,
+            strokeOpacity: 0.65,
+            strokeStyle: 'dashed',
+            zIndex: 50
+          });
+          map.add(trailLine);
+        }
+
+        if (pendingCenter) {
+          centerOnBoat();
+        }
+      });
+    }
+
     function updateBoatStatus(json) {
       try {
         var s = JSON.parse(json);
-        if (boatMarker) {
-          boatMarker.setPopupContent(
-            '<b>🚢 智清舟</b><br>' +
-            '<span style="color:#666">纬度: </span>' + s.lat.toFixed(6) + '<br>' +
-            '<span style="color:#666">经度: </span>' + s.lng.toFixed(6) + '<br>' +
-            '<span style="color:#666">速度: </span>' + s.speed.toFixed(1) + ' km/h<br>' +
-            '<span style="color:#666">卫星: </span>' + s.satellites + '<br>' +
-            '<span style="color:#666">状态: </span><span style="color:#52C41A">' + s.state + '</span>'
-          );
+        boatPopupHtml =
+          '<b>🚢 智清舟</b><br>' +
+          '<span style="color:#666">纬度: </span>' + s.lat.toFixed(6) + '<br>' +
+          '<span style="color:#666">经度: </span>' + s.lng.toFixed(6) + '<br>' +
+          '<span style="color:#666">速度: </span>' + s.speed.toFixed(1) + ' km/h<br>' +
+          '<span style="color:#666">卫星: </span>' + s.satellites + '<br>' +
+          '<span style="color:#666">状态: </span><span style="color:#52C41A">' + s.state + '</span>';
+        if (infoWindow.getIsOpen && infoWindow.getIsOpen() && boatMarker) {
+          infoWindow.setContent(boatPopupHtml);
         }
-      } catch(e){ console.error('updateBoatStatus error', e); }
+      } catch(e) {
+        console.error('updateBoatStatus error', e);
+      }
     }
 
-    /** ArkTS 调用 —— 居中到小船 */
     function centerOnBoat() {
-      if (boatMarker) map.setView(boatMarker.getLatLng(), 14);
+      pendingCenter = true;
+      if (lastBoatLngLat) {
+        map.panTo(lastBoatLngLat);
+        pendingCenter = false;
+      }
     }
 
-    /** ArkTS 调用 —— 清除轨迹 */
+    function clearHistoryOverlays() {
+      if (historyOverlays.length > 0) {
+        map.remove(historyOverlays);
+        historyOverlays = [];
+      }
+    }
+
     function clearTrail() {
       boatTrail = [];
-      if (trailLine) { map.removeLayer(trailLine); trailLine = null; }
+      if (trailLine) {
+        map.remove(trailLine);
+        trailLine = null;
+      }
+      clearHistoryOverlays();
     }
+
+    function showHistoryTrail(coords) {
+      if (!coords || coords.length === 0) return;
+      clearTrail();
+
+      convertPathFromGps(coords, function(path) {
+        if (!path || path.length === 0) return;
+
+        var historyLine = new AMap.Polyline({
+          path: path,
+          strokeColor: '#FF4D4F',
+          strokeWeight: 4,
+          strokeOpacity: 0.75,
+          strokeStyle: 'dashed',
+          zIndex: 60
+        });
+        map.add(historyLine);
+        historyOverlays.push(historyLine);
+
+        var startMarker = new AMap.CircleMarker({
+          center: path[0],
+          radius: 6,
+          strokeColor: '#fff',
+          strokeWeight: 2,
+          fillColor: '#52C41A',
+          fillOpacity: 1,
+          zIndex: 80
+        });
+        var endMarker = new AMap.CircleMarker({
+          center: path[path.length - 1],
+          radius: 6,
+          strokeColor: '#fff',
+          strokeWeight: 2,
+          fillColor: '#FF4D4F',
+          fillOpacity: 1,
+          zIndex: 80
+        });
+        map.add([startMarker, endMarker]);
+        historyOverlays.push(startMarker, endMarker);
+        map.setFitView(historyOverlays, false, [24, 24, 24, 24]);
+      });
+    }
+
+    function centerOnGps(lat, lng, zoom) {
+      toLngLatFromGps(lat, lng, function(lngLat) {
+        if (zoom) {
+          map.setZoomAndCenter(zoom, lngLat);
+        } else {
+          map.panTo(lngLat);
+        }
+      });
+    }
+
+    map.setView = function(latLng, zoom) {
+      if (latLng && latLng.length >= 2) {
+        centerOnGps(latLng[0], latLng[1], zoom);
+      }
+    };
 </script>
 </body>
 </html>

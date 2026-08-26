@@ -1,9 +1,10 @@
 /**
- * 小船运动控制页 —— 方向遥控 + MQTT 发送
+ * 小船运动控制页 —— 液态玻璃 · 海洋主题
  */
 import { NavigationFunc } from '../common/Types';
 import { MQTTInstance } from '../utils/MQTTConfig';
 import { createBoatCtrlFrame, arrayBufferToHexString } from '../utils/FrameUtils';
+import { LXGW_FONT, OceanPalette, OceanGradients, OceanFont, OceanRadius } from '../common/Theme';
 
 @Component
 export struct ControlPage {
@@ -22,7 +23,6 @@ export struct ControlPage {
     this.stopSending();
   }
 
-  // ===== 指令发送控制 =====
   private startSending(): void {
     if (this.timerID !== null) return;
     this.timerID = setInterval(() => {
@@ -54,7 +54,6 @@ export struct ControlPage {
     MQTTInstance.pushMessage(hexString);
   }
 
-  // ===== 按钮触摸事件 =====
   private handleButtonPress(dir: 'forward' | 'backward' | 'left' | 'right'): void {
     switch (dir) {
       case 'forward':  this.forwardPressed = true;  break;
@@ -89,126 +88,133 @@ export struct ControlPage {
     if (this.backwardPressed) return '后退';
     if (this.leftPressed) return '左转';
     if (this.rightPressed) return '右转';
-    return '停止';
+    return '停泊';
   }
 
-  // ===== UI =====
   build() {
     Column() {
-      // 顶部导航
+      // 玻璃顶部导航
       Row() {
         Image($r('app.media.ic_back'))
-          .width(24)
-          .height(24)
+          .width(24).height(24)
+          .fillColor(OceanPalette.TEXT_WHITE)
           .onClick(() => this.navigate(0))
-
         Text('小船运动控制')
-          .fontSize(20)
+          .fontSize(OceanFont.HEADING)
           .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
+          .fontFamily(LXGW_FONT)
+          .fontColor(OceanPalette.TEXT_WHITE)
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-          .margin({ left: 10 })
+          .margin({ left: 10, right: 34 })
       }
-      .padding(15)
+      .padding({ left: 18, right: 18, top: 52, bottom: 14 })
       .width('100%')
-      .backgroundColor('#1890FF')
+      .backgroundColor('#33002244')
+      .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK, {
+        colorMode: ThemeColorMode.DARK,
+        adaptiveColor: AdaptiveColor.DEFAULT
+      })
+
+      // 状态显示卡
+      Column() {
+        Text('当前状态')
+          .fontSize(OceanFont.CAPTION)
+          .fontFamily(LXGW_FONT)
+          .fontColor(OceanPalette.TEXT_SECONDARY)
+        Text(this.getStatusText())
+          .fontSize(26)
+          .fontWeight(FontWeight.Bold)
+          .fontFamily(LXGW_FONT)
+          .fontColor(this.getStatusText() === '停泊' ? OceanPalette.OCEAN : OceanPalette.ACCENT_KELP)
+          .margin({ top: 6 })
+          .shadow({
+            radius: 12,
+            color: this.getStatusText() === '停泊' ? OceanPalette.HALO_BLUE : '#663DDC97',
+            offsetX: 0, offsetY: 2
+          })
+      }
+      .width('90%')
+      .padding(18)
+      .alignItems(HorizontalAlign.Center)
+      .backgroundColor(OceanPalette.GLASS_WHITE)
+      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+      .borderRadius(OceanRadius.CARD)
+      .border({ width: 1, color: OceanPalette.GLASS_BORDER })
+      .shadow({ radius: 24, color: '#330077B6', offsetX: 0, offsetY: 8 })
+      .margin({ top: 20, bottom: 22 })
 
       Text('方向控制')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#1890FF')
-        .margin({ top: 30, bottom: 20 })
-
-      // ★ 方向控制盘 —— 直接内联引用 this.xxxPressed，确保 @State 响应式刷新
-      Column() {
-        // 前进按钮
-        Button('前进', { type: ButtonType.Circle })
-          .width(100)
-          .height(100)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
-          .backgroundColor(this.forwardPressed ? '#52C41A' : '#1890FF')
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.handleButtonPress('forward');
-            } else if (event.type === TouchType.Up) {
-              this.handleButtonRelease('forward');
-            }
-          })
-          .margin({ bottom: 20 })
-
-        // 左右按钮行
-        Row() {
-          // 左转按钮
-          Button('左转', { type: ButtonType.Circle })
-            .width(100)
-            .height(100)
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
-            .backgroundColor(this.leftPressed ? '#52C41A' : '#1890FF')
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.handleButtonPress('left');
-              } else if (event.type === TouchType.Up) {
-                this.handleButtonRelease('left');
-              }
-            })
-            .margin({ right: 30 })
-
-          // 空位占位
-          Column()
-            .width(100)
-            .height(100)
-
-          // 右转按钮
-          Button('右转', { type: ButtonType.Circle })
-            .width(100)
-            .height(100)
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
-            .backgroundColor(this.rightPressed ? '#52C41A' : '#1890FF')
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.handleButtonPress('right');
-              } else if (event.type === TouchType.Up) {
-                this.handleButtonRelease('right');
-              }
-            })
-            .margin({ left: 30 })
-        }
+        .fontSize(OceanFont.SUBHEAD)
+        .fontWeight(FontWeight.Medium)
+        .fontFamily(LXGW_FONT)
+        .fontColor(OceanPalette.TEXT_WHITE)
         .margin({ bottom: 20 })
 
-        // 后退按钮
-        Button('后退', { type: ButtonType.Circle })
-          .width(100)
-          .height(100)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
-          .backgroundColor(this.backwardPressed ? '#52C41A' : '#1890FF')
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.handleButtonPress('backward');
-            } else if (event.type === TouchType.Up) {
-              this.handleButtonRelease('backward');
-            }
-          })
-          .margin({ top: 20 })
-      }
-      .margin({ top: 20, bottom: 30 })
+      // 方向控制盘
+      Column({ space: 22 }) {
+        // 前进
+        this.buildDirButton('前进', '↑', this.forwardPressed, 'forward')
 
-      // 操作提示
-      Text('按住方向按钮控制小船运动，松开按钮停止')
-        .fontSize(16)
-        .fontColor('#666666')
-        .margin({ top: 30 })
+        // 左右
+        Row() {
+          this.buildDirButton('左转', '←', this.leftPressed, 'left')
+          Column().width(100).height(100)
+          this.buildDirButton('右转', '→', this.rightPressed, 'right')
+        }
+        .width('80%')
+        .justifyContent(FlexAlign.SpaceBetween)
+
+        // 后退
+        this.buildDirButton('后退', '↓', this.backwardPressed, 'backward')
+      }
+      .margin({ top: 6, bottom: 24 })
+
+      // 提示
+      Text('· 按住方向按钮以持续控制，松开即停 ·')
+        .fontSize(OceanFont.MICRO)
+        .fontFamily(LXGW_FONT)
+        .fontColor('#CCFFFFFF')
+        .margin({ top: 12 })
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('#F0F5FF')
+    .width('100%').height('100%')
+  }
+
+  @Builder
+  buildDirButton(label: string, arrow: string, pressed: boolean,
+                 dir: 'forward' | 'backward' | 'left' | 'right') {
+    Column() {
+      Text(arrow)
+        .fontSize(32)
+        .fontWeight(FontWeight.Bold)
+        .fontFamily(LXGW_FONT)
+        .fontColor(OceanPalette.TEXT_WHITE)
+      Text(label)
+        .fontSize(OceanFont.CAPTION)
+        .fontFamily(LXGW_FONT)
+        .fontColor('#E6FFFFFF')
+        .margin({ top: 2 })
+    }
+    .width(100).height(100)
+    .borderRadius(50)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .linearGradient(pressed ? OceanGradients.BUTTON_SUCCESS : OceanGradients.BUTTON_PRIMARY)
+    .border({
+      width: 2,
+      color: pressed ? '#CCFFFFFF' : OceanPalette.GLASS_BORDER
+    })
+    .shadow({
+      radius: pressed ? 28 : 18,
+      color: pressed ? '#663DDC97' : OceanPalette.HALO_BLUE,
+      offsetX: 0,
+      offsetY: pressed ? 2 : 8
+    })
+    .scale({ x: pressed ? 0.94 : 1, y: pressed ? 0.94 : 1 })
+    .animation({ duration: 120, curve: Curve.EaseOut })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) this.handleButtonPress(dir);
+      else if (event.type === TouchType.Up) this.handleButtonRelease(dir);
+    })
   }
 }

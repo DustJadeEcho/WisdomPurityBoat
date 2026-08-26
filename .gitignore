@@ -10,3 +10,6 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+# 霞鹜文楷字体（约 25MB），请按 rawfile/fonts/README.md 自行下载放置
+/entry/src/main/resources/rawfile/fonts/*.ttf

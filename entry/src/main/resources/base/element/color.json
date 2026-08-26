@@ -1,8 +1,20 @@
 {
   "color": [
-    {
-      "name": "start_window_background",
-      "value": "#FFFFFF"
-    }
+    { "name": "start_window_background", "value": "#003B6F" },
+    { "name": "ocean_deep",        "value": "#003B6F" },
+    { "name": "ocean_main",        "value": "#0077B6" },
+    { "name": "ocean_lake",        "value": "#0096C7" },
+    { "name": "ocean_shallow",     "value": "#00B4D8" },
+    { "name": "ocean_lagoon",      "value": "#48CAE4" },
+    { "name": "ocean_sky",         "value": "#90E0EF" },
+    { "name": "ocean_mist",        "value": "#CAF0F8" },
+    { "name": "ocean_foam",        "value": "#EAF6FB" },
+    { "name": "accent_kelp",       "value": "#3DDC97" },
+    { "name": "accent_coral",      "value": "#FF7A8A" },
+    { "name": "accent_gold",       "value": "#FFD166" },
+    { "name": "text_primary",      "value": "#002244" },
+    { "name": "text_secondary",    "value": "#3A5D7A" },
+    { "name": "glass_white",       "value": "#99FFFFFF" },
+    { "name": "glass_border",      "value": "#66FFFFFF" }
   ]
 }

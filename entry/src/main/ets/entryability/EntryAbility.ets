@@ -1,6 +1,6 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { window } from '@kit.ArkUI';
+import { window, font } from '@kit.ArkUI';
 
 const DOMAIN = 0x0000;
 
@@ -15,8 +15,30 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+
+    // ★ 注册霞鹜文楷字体（全局可用，fontFamily: 'LXGWWenKai'）
+    try {
+      font.registerFont({
+        familyName: 'LXGWWenKai',
+        familySrc: $rawfile('fonts/LXGWWenKai.ttf')
+      });
+      hilog.info(DOMAIN, 'font', '%{public}s', 'LXGW WenKai font registered');
+    } catch (e) {
+      hilog.warn(DOMAIN, 'font', 'LXGW WenKai register failed: %{public}s', JSON.stringify(e));
+    }
+
+    // ★ 设置沉浸式状态栏（让海洋渐变延伸到顶部）
+    try {
+      const mainWin = windowStage.getMainWindowSync();
+      mainWin.setWindowLayoutFullScreen(true);
+      mainWin.setWindowSystemBarProperties({
+        statusBarContentColor: '#FFFFFF',
+        navigationBarContentColor: '#FFFFFF'
+      });
+    } catch (e) {
+      hilog.warn(DOMAIN, 'window', 'set immersive failed: %{public}s', JSON.stringify(e));
+    }
 
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
@@ -28,17 +50,14 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
-    // Main window is destroyed, release UI related resources
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageDestroy');
   }
 
   onForeground(): void {
-    // Ability has brought to foreground
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
   }
 
   onBackground(): void {
-    // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
   }
 }

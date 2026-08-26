@@ -5,12 +5,13 @@
 import { MQTTClient, MQTTOptionsType } from './MQTTClient';
 
 const MQTTOption: MQTTOptionsType = {
-  url: 'mqtt://124.70.15.127:1883',
-  clientId: '/qhmu/lly/harmonyos/01',
-  userName: 'lly',
-  password: 'qhmully123',
-  pubTopicName: '/qhmu/lly/hsetting',
-  subTopicName: '/qhmu/lly/mcu',
+  url: 'mqtt://your-broker-host:1883',
+  clientId: '/your/client/id',
+  userName: 'your-username',
+  password: 'your-password',
+  pubTopicName: '/your/pub/topic',      // 下发控制指令
+  subTopicName: '/your/water/topic',    // 订阅水质数据
+  gubTopicName: '/your/gps/topic',      // 订阅 GPS 数据
   qos: 0
 };
 
